@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EuroSpotter - Die ultimative Planespotting Karte</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* === CSS STYLING === */
+        :root {
+            --primary-bg: #1a1a2e;
+            --secondary-bg: #16213e;
+            --accent-color: #e94560;
+            --text-color: #ededed;
+            --sidebar-width: 350px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body, html {
+            height: 100%;
+            width: 100%;
+            background-color: var(--primary-bg);
+            color: var(--text-color);
+            overflow: hidden;
+        }
+
+        /* Header Styling */
+        header {
+            background-color: var(--secondary-bg);
+            height: 60px;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            z-index: 1000;
+            position: relative;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            color: var(--accent-color);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Layout Container */
+        .container {
+            display: flex;
+            height: calc(100% - 60px);
+            width: 100%;
+        }
+
+        /* Sidebar Styling */
+        .sidebar {
+            width: var(--sidebar-width);
+            background-color: var(--primary-bg);
+            height: 100%;
+            overflow-y: auto;
+            border-right: 2px solid var(--secondary-bg);
+            padding: 20px;
+            z-index: 500;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar h2 {
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--secondary-bg);
+            padding-bottom: 10px;
+        }
+
+        .airport-card {
+            background-color: var(--secondary-bg);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.2s;
+            border-left: 4px solid transparent;
+        }
+
+        .airport-card:hover {
+            transform: translateY(-2px);
+            background-color: #1f2d50;
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .airport-card h3 {
+            font-size: 1.1rem;
+            margin-bottom: 5px;
+        }
+
+        .airport-card p {
+            font-size: 0.9rem;
+            color: #aaa;
+        }
+
+        .spot-badge {
+            display: inline-block;
+            background-color: var(--accent-color);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            margin-top: 8px;
+            font-weight: bold;
+        }
+
+        /* Map Container */
+        #map {
+            flex-grow: 1;
+            height: 100%;
+            background-color: #e5e3df; /* Fallback */
+        }
+
+        /* Custom Popup Styling */
+        .leaflet-popup-content-wrapper {
+            background-color: var(--primary-bg);
+            color: var(--text-color);
+            border-radius: 8px;
+            border: 1px solid var(--accent-color);
+        }
+
+        .leaflet-popup-tip {
+            background-color: var(--primary-bg);
+            border: 1px solid var(--accent-color);
+        }
+
+        .popup-content h3 {
+            color: var(--accent-color);
+            margin-bottom: 5px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
+            font-size: 1.2rem;
+        }
+
+        .popup-content h4 {
+            margin-top: 10px;
+            color: #ddd;
+            font-size: 1rem;
+        }
+
+        .popup-content ul {
+            list-style-type: none;
+            margin-top: 5px;
+        }
+
+        .popup-content li {
+            background-color: var(--secondary-bg);
+            margin-bottom: 5px;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+
+        .popup-content li i {
+            color: var(--accent-color);
+            margin-right: 5px;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                height: 30%;
+                border-right: none;
+                border-bottom: 2px solid var(--secondary-bg);
+            }
+            #map {
+                height: 70%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1><i class="fa-solid fa-plane-departure"></i> EuroSpotter Map</h1>
+    </header>
+
+    <div class="container">
+        <div class="sidebar" id="sidebar">
+            <h2>Hervorgehobene Flughäfen</h2>
+            <div id="airport-list">
+                </div>
+        </div>
+
+        <div id="map"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <script>
+        // === JAVASCRIPT LOGIK & DATENBANK ===
+
+        // 1. Initialisierung der Karte (Zentriert auf Europa)
+        const map = L.map('map').setView([50.0, 10.0], 5);
+
+        // 2. Kartenebenen (Tiles) definieren
+        // Standard Karte (OpenStreetMap)
+        const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        });
+
+        // Terrain/Gelände Karte (OpenTopoMap) - Perfekt fürs Gelände!
+        const topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+            maxZoom: 17,
+            attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap'
+        });
+
+        // Satelliten Karte (Esri World Imagery) - Gut fürs Reinzoomen auf Landebahnen
+        const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 19,
+            attribution: 'Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+        });
+
+        // Dunkler Modus Karte (CartoDB Dark) - Passend zum UI Design
+        const darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors © CARTO'
+        }).addTo(map); // Standardmäßig aktiviert
+
+        // Layer-Kontrolle hinzufügen (oben rechts)
+        const baseMaps = {
+            "Dunkles Design (Standard)": darkLayer,
+            "Satellit (Nahansicht)": satelliteLayer,
+            "Gelände & Topographie": topoLayer,
+            "Standard Karte": osmLayer
+        };
+        L.control.layers(baseMaps).addTo(map);
+
+        // 3. Custom Icons definieren
+        const airportIcon = L.divIcon({
+            html: '<i class="fa-solid fa-plane fa-lg" style="color: #e94560; filter: drop-shadow(0px 0px 2px #000);"></i>',
+            className: 'custom-div-icon',
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+        });
+
+        const spotIcon = L.divIcon({
+            html: '<i class="fa-solid fa-camera fa-sm" style="color: #4CAF50; filter: drop-shadow(0px 0px 2px #000);"></i>',
+            className: 'custom-div-icon',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+        });
+
+        // 4. DATENBANK: Flughäfen und Spotting-Plätze (Kann beliebig erweitert werden)
+        const airportsData = [
+            {
+                id: "EDDF",
+                name: "Frankfurt am Main (FRA)",
+                lat: 50.033333,
+                lng: 8.570556,
+                desc: "Deutschlands größter Hub. Sehr spotterfreundlich mit mehreren offiziellen Plattformen.",
+                spottingLocations: [
+                    { name: "Besucherplattform Terminal 2", lat: 50.0526, lng: 8.5835, desc: "Perfekt für Vorfeld-Action, kostet Eintritt, Glasfenster." },
+                    { name: "Affenfelsen (Startbahn West)", lat: 49.9975, lng: 8.5255, desc: "Der absolute Klassiker. Perfekt für Departures auf der 18. Braucht 100-400mm Linse." },
+                    { name: "Zeppelinheim (A5)", lat: 50.0355, lng: 8.6185, desc: "Morgens super für Anflüge auf die 25L/25C. Direkt am Waldrand." }
+                ]
+            },
+            {
+                id: "EHAM",
+                name: "Amsterdam Schiphol (AMS)",
+                lat: 52.308056,
+                lng: 4.764167,
+                desc: "Einer der besten Flughäfen Europas für Spotter durch die extrem nahen Pisten.",
+                spottingLocations: [
+                    { name: "Polderbaan Spotterplaats", lat: 52.3551, lng: 4.7078, desc: "Offizieller Parkplatz an der Polderbaan (18R/36L). Keine Zäune im Weg! Perfekt für Nachmittagslicht." },
+                    { name: "Buitenveldertbaan (McDonalds)", lat: 52.3082, lng: 4.8211, desc: "Direkt am Fastfood-Restaurant, Flugzeuge rollen gefühlt über das Auto." },
+                    { name: "Panoramaterras", lat: 52.3089, lng: 4.7635, desc: "Kostenlose Terrasse auf dem Terminal. Inklusive alter KLM Fokker 100." }
+                ]
+            },
+            {
+                id: "EGLL",
+                name: "London Heathrow (LHR)",
+                lat: 51.4700,
+                lng: -0.4543,
+                desc: "Europas Mega-Hub. Sehr viel Heavy-Traffic (A380, B777).",
+                spottingLocations: [
+                    { name: "Myrtle Avenue", lat: 51.4632, lng: -0.4283, desc: "Weltberühmte Wiese direkt im Anflug auf die 27L. Extrem nah, tiefe Anflüge." },
+                    { name: "Renaissance Hotel", lat: 51.4820, lng: -0.4435, desc: "Zimmer mit Runway-View buchen für die beste Sicht auf die 27R." }
+                ]
+            },
+            {
+                id: "LSZH",
+                name: "Zürich Kloten (ZRH)",
+                lat: 47.464722,
+                lng: 8.549167,
+                desc: "Sehr saubere und spotterfreundliche Umgebung mit toller Szenerie.",
+                spottingLocations: [
+                    { name: "Zuschauerterrasse B/E", lat: 47.4615, lng: 8.5525, desc: "Hervorragender Blick auf die Docks und Piste 16/34. Kein Glas im Weg!" },
+                    { name: "Heligrill / Spotterhügel", lat: 47.4589, lng: 8.5290, desc: "Toller Hügel bei Piste 14/32. Es gibt Wurst und gute Fotomotive." }
+                ]
+            },
+            {
+                id: "EDDM",
+                name: "München Franz Josef Strauß (MUC)",
+                lat: 48.353783,
+                lng: 11.786086,
+                desc: "Großer Hub im Süden Deutschlands. Zwei parallele Bahnen.",
+                spottingLocations: [
+                    { name: "Besucherhügel Nord", lat: 48.3639, lng: 11.7816, desc: "Künstlicher Hügel im Besucherpark. Gute Sicht auf die Nordbahn." },
+                    { name: "Südbahn Anflug (Schwaig)", lat: 48.3375, lng: 11.8320, desc: "Gute Position für Anflüge im Osten auf die Südbahn. Am besten mit Fahrrad erreichbar." }
+                ]
+            },
+            {
+                id: "LEMD",
+                name: "Madrid Barajas (MAD)",
+                lat: 40.498332,
+                lng: -3.567598,
+                desc: "Spaniens größter Flughafen, tolle Architektur und viel LATAM Traffic.",
+                spottingLocations: [
+                    { name: "Spotting Point Mound", lat: 40.5055, lng: -3.5412, desc: "Hügel auf der Ostseite. Super für Nachmittagslicht." }
+                ]
+            },
+            {
+                id: "LOWW",
+                name: "Wien Schwechat (VIE)",
+                lat: 48.110278,
+                lng: 16.569722,
+                desc: "Viel Ost-Europa Traffic und Austrian Airlines Hub.",
+                spottingLocations: [
+                    { name: "Parkhaus 4", lat: 48.1205, lng: 16.5650, desc: "Oberstes Parkdeck bietet tolle Übersicht über das Vorfeld." },
+                    { name: "Pistenende 16", lat: 48.0930, lng: 16.5820, desc: "Dirt-Track in der Nähe der Landebahn. Gute Nahaufnahmen möglich." }
+                ]
+            }
+        ];
+
+        // 5. Logik zum Rendern der Karte und der Seitenleiste
+        const airportListContainer = document.getElementById('airport-list');
+        const markers = {}; // Speichert Marker, um per Klick in der Sidebar darauf zu zoomen
+
+        airportsData.forEach(airport => {
+            // Flughafen-Marker auf der Karte platzieren
+            const mainMarker = L.marker([airport.lat, airport.lng], { icon: airportIcon }).addTo(map);
+            
+            // HTML für das Popup des Flughafens generieren
+            let popupHtml = `
+                <div class="popup-content">
+                    <h3>${airport.name}</h3>
+                    <p>${airport.desc}</p>
+                    <h4><i class="fa-solid fa-camera"></i> Top Spotting Plätze:</h4>
+                    <ul>
+            `;
+            
+            // Schleife durch alle Spotting-Locations für diesen Flughafen
+            airport.spottingLocations.forEach(spot => {
+                popupHtml += `<li><i class="fa-solid fa-location-dot"></i> <strong>${spot.name}:</strong> <br>${spot.desc}</li>`;
+                
+                // Spotting-Location Marker (Kleine Kamera-Icons) auf der Karte hinzufügen
+                const spotMarker = L.marker([spot.lat, spot.lng], { icon: spotIcon }).addTo(map);
+                spotMarker.bindPopup(`<b>${spot.name}</b><br>${spot.desc}`);
+            });
+
+            popupHtml += `</ul></div>`;
+            mainMarker.bindPopup(popupHtml);
+
+            // Marker in unserem Objekt speichern für die Sidebar-Logik
+            markers[airport.id] = mainMarker;
+
+            // Flughafen zur Seitenleiste (Sidebar) hinzufügen
+            const card = document.createElement('div');
+            card.className = 'airport-card';
+            card.innerHTML = `
+                <h3>${airport.name}</h3>
+                <p>${airport.desc.substring(0, 50)}...</p>
+                <div class="spot-badge">${airport.spottingLocations.length} Spotting-Plätze</div>
+            `;
+            
+            // Klick-Event für die Seitenleiste: Zentriert die Karte und öffnet das Popup
+            card.addEventListener('click', () => {
+                // Zoom-Level dynamisch anpassen. Um das Gelände zu sehen, zoomen wir tief rein (Level 13)
+                map.flyTo([airport.lat, airport.lng], 13, {
+                    animate: true,
+                    duration: 1.5
+                });
+                // Öffne das Popup nach dem Flug
+                setTimeout(() => {
+                    mainMarker.openPopup();
+                }, 1500);
+            });
+
+            airportListContainer.appendChild(card);
+        });
+
+        // 6. Zusatz-Feature: Bei tiefem Reinzoomen automatisch auf Satellit/Gelände hinweisen
+        map.on('zoomend', function() {
+            const currentZoom = map.getZoom();
+            // Optional: Logik hinzufügen, die bei extremem Zoom (>15) z.B. UI-Tipps einblendet
+            // "Wechsle oben rechts auf die Satelliten-Ansicht, um die Zäune und Hügel genau zu sehen!"
+        });
+
+    </script>
+</body>
+</html>
