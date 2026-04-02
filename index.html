@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EuroSpotter Pro | Live Map</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --dark-blue: #0f172a;
+            --accent: #38bdf8;
+            --glass: rgba(30, 41, 59, 0.8);
+            --text: #f1f5f9;
+        }
+
+        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Inter', sans-serif; background: var(--dark-blue); color: var(--text); overflow: hidden; }
+
+        /* Modernes Interface */
+        #ui-wrapper { position: absolute; top: 20px; left: 20px; z-index: 1000; width: 350px; pointer-events: none; }
+        .glass-panel { 
+            background: var(--glass); 
+            backdrop-filter: blur(12px); 
+            border: 1px solid rgba(255,255,255,0.1); 
+            border-radius: 16px; 
+            padding: 20px; 
+            pointer-events: auto;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            margin-bottom: 15px;
+        }
+
+        h1 { font-size: 1.4rem; margin: 0 0 15px 0; display: flex; align-items: center; gap: 10px; color: var(--accent); }
+        
+        .search-box {
+            width: 100%;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 10px;
+            border-radius: 8px;
+            color: white;
+            margin-bottom: 15px;
+        }
+
+        .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.8rem; margin-bottom: 15px; }
+        .stat-card { background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; text-align: center; }
+
+        .airport-list { max-height: 400px; overflow-y: auto; border-radius: 8px; }
+        .airport-item { 
+            padding: 12px; 
+            border-bottom: 1px solid rgba(255,255,255,0.1); 
+            cursor: pointer; 
+            transition: 0.2s;
+        }
+        .airport-item:hover { background: rgba(56, 189, 248, 0.15); }
+        .icao { font-weight: bold; color: var(--accent); font-family: monospace; }
+
+        #map { height: 100vh; width: 100vw; }
+
+        /* Custom Popup Design */
+        .leaflet-popup-content-wrapper { background: var(--dark-blue); color: white; border-radius: 12px; }
+        .spot-info { border-left: 3px solid var(--accent); padding-left: 10px; margin: 10px 0; }
+        .btn-dir { 
+            display: inline-block; 
+            padding: 5px 10px; 
+            background: var(--accent); 
+            color: var(--dark-blue); 
+            border-radius: 4px; 
+            text-decoration: none; 
+            font-weight: bold; 
+            font-size: 0.8rem; 
+            margin-top: 5px;
+        }
+
+        /* Loading Overlay */
+        #loader {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--dark-blue); z-index: 9999;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .spinner { width: 50px; height: 50px; border: 5px solid rgba(56, 189, 248, 0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div id="loader">
+        <div class="spinner"></div>
+        <p style="margin-top: 20px;">Initialisiere Europa-Radar...</p>
+    </div>
+
+    <div id="ui-wrapper">
+        <div class="glass-panel">
+            <h1><i class="fa-solid fa-radar"></i> EuroSpotter Pro</h1>
+            <input type="text" class="search-box" id="search" placeholder="Suche ICAO oder Stadt...">
+            
+            <div class="stats">
+                <div class="stat-card"><span id="count-airports">0</span><br>Flughäfen</div>
+                <div class="stat-card"><span id="count-spots">0</span><br>Spotter-Plätze</div>
+            </div>
+
+            <div class="airport-list" id="list">
+                </div>
+        </div>
+        
+        <div class="glass-panel" style="font-size: 0.8rem;">
+            <i class="fa-solid fa-circle-info"></i> <b>Tipp:</b> Nutze das Ebenen-Symbol rechts für die Gelände-Ansicht (Topo), um Hügel für Fotos zu finden.
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // --- DATENBANK (Komplex & Erweitert) ---
+        const spotData = [
+            {
+                name: "Frankfurt", icao: "EDDF", lat: 50.033, lng: 8.570,
+                info: "Größter Hub Deutschlands. Bekannt für 4 Bahnen-Betrieb.",
+                spots: [
+                    { n: "Affenfelsen", lat: 49.9975, lng: 8.5255, d: "Startbahn West (18). Legendär." },
+                    { n: "Luftbrückendenkmal", lat: 50.0375, lng: 8.5978, d: "Anflug 25L/C." },
+                    { n: "Aussichtsplattform T2", lat: 50.052, lng: 8.583, d: "Blick auf das Vorfeld." }
+                ]
+            },
+            {
+                name: "Amsterdam Schiphol", icao: "EHAM", lat: 52.308, lng: 4.764,
+                info: "Bestes Spotting-Gelände in Europa (Polderbaan).",
+                spots: [
+                    { n: "Polderbaan", lat: 52.355, lng: 4.707, d: "Kein Zaun, perfekte Sicht auf 18R/36L." },
+                    { n: "McDonalds", lat: 52.308, lng: 4.821, d: "Extrem nah an der 09/27." }
+                ]
+            },
+            {
+                name: "München", icao: "EDDM", lat: 48.353, lng: 11.786,
+                info: "5-Sterne Airport, viel Lufthansa A350 Action.",
+                spots: [
+                    { n: "Besucherpark Hügel", lat: 48.363, lng: 11.781, d: "Blick auf Rollwege und Nordbahn." },
+                    { n: "Südbahn Zaun", lat: 48.339, lng: 11.831, d: "Perfekt für Anflüge 26L." }
+                ]
+            },
+            {
+                name: "London Heathrow", icao: "EGLL", lat: 51.470, lng: -0.454,
+                info: "Heavy-Paradise (A380, B747/B777).",
+                spots: [
+                    { n: "Myrtle Avenue", lat: 51.4632, lng: -0.4283, d: "Der weltberühmte Anflugplatz 27L." },
+                    { n: "Thistle Hotel", lat: 51.483, lng: -0.448, d: "Blick auf Runway 27R." }
+                ]
+            },
+            {
+                name: "Zürich", icao: "LSZH", lat: 47.464, lng: 8.549,
+                info: "Sehr sauber, super Plattformen.",
+                spots: [
+                    { n: "Heligrill", lat: 47.458, lng: 8.529, d: "Piste 14/32 & Snacks." },
+                    { n: "Dock E Plattform", lat: 47.461, lng: 8.552, d: "Mitten im Geschehen." }
+                ]
+            },
+            {
+                name: "Wien", icao: "LOWW", lat: 48.110, lng: 16.569,
+                info: "Viel Traffic aus Osteuropa/Asien.",
+                spots: [
+                    { n: "Parkhaus 4", lat: 48.120, lng: 16.565, d: "Höchster Punkt für Übersicht." }
+                ]
+            },
+            {
+                name: "Düsseldorf", icao: "EDDL", lat: 51.289, lng: 6.766,
+                info: "Tolle Terrasse am Bahnhof und am Terminal.",
+                spots: [
+                    { n: "Bahnhofsterrasse", lat: 51.296, lng: 6.784, d: "Blick über die komplette Piste." }
+                ]
+            }
+        ];
+
+        // --- KARTEN LOGIK ---
+        const map = L.map('map', { zoomControl: false }).setView([50, 10], 5);
+
+        const layers = {
+            Dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map),
+            Satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'),
+            Terrain: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png')
+        };
+        L.control.layers(layers).addTo(map);
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+        const markers = L.groupAdsorb = L.layerGroup().addTo(map);
+
+        function init() {
+            let spotCount = 0;
+            document.getElementById('count-airports').innerText = spotData.length;
+
+            spotData.forEach(ap => {
+                // Marker
+                const icon = L.divIcon({
+                    html: `<i class="fa-solid fa-plane" style="color:var(--accent); font-size:20px; filter:drop-shadow(0 0 5px black)"></i>`,
+                    className: 'custom-icon', iconSize: [25, 25]
+                });
+
+                const m = L.marker([ap.lat, ap.lng], { icon: icon }).addTo(markers);
+                
+                let spotListHtml = "";
+                ap.spots.forEach(s => {
+                    spotCount++;
+                    spotListHtml += `
+                        <div class="spot-info">
+                            <b>${s.n}</b><br><small>${s.d}</small><br>
+                            <a href="https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}" target="_blank" class="btn-dir">Route planen</a>
+                        </div>`;
+                });
+
+                m.bindPopup(`
+                    <div style="min-width:200px">
+                        <span class="icao">${ap.icao}</span>
+                        <h3 style="margin:5px 0; color:var(--accent)">${ap.name}</h3>
+                        <p style="font-size:0.8rem">${ap.info}</p>
+                        <hr style="opacity:0.2">
+                        ${spotListHtml}
+                    </div>
+                `);
+
+                // Sidebar Liste
+                const item = document.createElement('div');
+                item.className = 'airport-item';
+                item.innerHTML = `<span class="icao">${ap.icao}</span> ${ap.name}`;
+                item.onclick = () => {
+                    map.flyTo([ap.lat, ap.lng], 13);
+                    setTimeout(() => m.openPopup(), 1000);
+                };
+                document.getElementById('list').appendChild(item);
+            });
+
+            document.getElementById('count-spots').innerText = spotCount;
+            document.getElementById('loader').style.display = 'none';
+        }
+
+        // Suche
+        document.getElementById('search').addEventListener('input', (e) => {
+            const val = e.target.value.toLowerCase();
+            document.querySelectorAll('.airport-item').forEach(el => {
+                el.style.display = el.innerText.toLowerCase().includes(val) ? 'block' : 'none';
+            });
+        });
+
+        window.onload = init;
+    </script>
+</body>
+</html>
