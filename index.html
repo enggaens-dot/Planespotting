@@ -3,99 +3,116 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EuroSpotter Ultra - Pro Edition</title>
+    <title>EuroSpotter Tactical Radar v3</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
         :root {
-            --bg: #0f172a;
-            --card: rgba(15, 23, 42, 0.9);
-            --accent-civil: #38bdf8;
-            --accent-mil: #facc15;
-            --accent-spot: #10b981; /* Grün für Spotting-Punkte */
-            --text: #f1f5f9;
+            --bg: #020617;
+            --card: rgba(15, 23, 42, 0.95);
+            --accent-civil: #22d3ee;
+            --accent-mil: #fbbf24;
+            --accent-spot: #10b981;
+            --text: #f8fafc;
+            --border: rgba(255, 255, 255, 0.1);
         }
 
-        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); overflow: hidden; }
+        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Inter', 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); overflow: hidden; }
 
-        /* UI Elements */
+        /* UI Panel Styling */
         #control-panel {
             position: absolute; top: 20px; left: 20px; z-index: 1000;
-            width: 350px; max-height: 85vh;
-            background: var(--card); backdrop-filter: blur(15px);
-            border-radius: 15px; border: 1px solid rgba(255,255,255,0.1);
-            display: flex; flex-direction: column; padding: 15px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+            width: 360px; max-height: 90vh;
+            background: var(--card); backdrop-filter: blur(20px);
+            border-radius: 20px; border: 1px solid var(--border);
+            display: flex; flex-direction: column; padding: 20px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
         }
 
-        .header h1 { font-size: 1.1rem; margin: 0 0 15px 0; color: var(--accent-civil); text-transform: uppercase; letter-spacing: 1px; }
+        .header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+        .header i { color: var(--accent-civil); font-size: 1.5rem; }
+        .header h1 { font-size: 1.2rem; margin: 0; font-weight: 800; letter-spacing: 1px; color: #fff; }
 
-        input#search {
-            width: 100%; padding: 10px; border-radius: 8px;
-            border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3);
-            color: white; margin-bottom: 10px; outline: none;
+        .search-box { position: relative; margin-bottom: 15px; }
+        .search-box input {
+            width: 100%; padding: 12px 15px; border-radius: 12px;
+            border: 1px solid var(--border); background: rgba(0, 0, 0, 0.4);
+            color: #fff; outline: none; transition: 0.3s; box-sizing: border-box;
         }
+        .search-box input:focus { border-color: var(--accent-civil); box-shadow: 0 0 10px rgba(34, 211, 238, 0.2); }
 
-        .filters { display: flex; gap: 5px; margin-bottom: 10px; }
+        .filters { display: flex; gap: 8px; margin-bottom: 15px; }
         .filter-btn {
-            flex: 1; padding: 6px; border-radius: 6px; border: none;
-            cursor: pointer; font-weight: bold; font-size: 0.7rem; transition: 0.2s;
+            flex: 1; padding: 10px; border-radius: 10px; border: none;
+            cursor: pointer; font-weight: 700; font-size: 0.75rem; transition: 0.2s;
+            text-transform: uppercase;
         }
-        .btn-all { background: #475569; color: white; }
+        .btn-all { background: #334155; color: white; }
         .btn-civil { background: var(--accent-civil); color: #000; }
         .btn-mil { background: var(--accent-mil); color: #000; }
+        .filter-btn:hover { opacity: 0.9; transform: translateY(-1px); }
 
-        #list { overflow-y: auto; flex-grow: 1; border-radius: 8px; background: rgba(0,0,0,0.2); }
+        #list { overflow-y: auto; flex-grow: 1; border-radius: 12px; }
         .item {
-            padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);
-            cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 0.85rem;
+            padding: 12px; border-bottom: 1px solid var(--border);
+            cursor: pointer; display: flex; align-items: center; gap: 15px; transition: 0.2s;
         }
-        .item:hover { background: rgba(56, 189, 248, 0.1); }
-        .type-indicator { width: 6px; height: 6px; border-radius: 50%; }
+        .item:hover { background: rgba(255, 255, 255, 0.05); }
+        .item b { font-size: 0.95rem; display: block; }
+        .item span { font-size: 0.75rem; color: #94a3b8; font-family: monospace; }
+        
+        .type-dot { width: 8px; height: 8px; border-radius: 50%; }
 
-        #map { height: 100vh; width: 100vw; background: #0b0e14; }
+        /* Map & Markers */
+        #map { height: 100vh; width: 100vw; background: #020617; }
 
-        /* Tooltips */
         .leaflet-tooltip {
             background: transparent !important; border: none !important; box-shadow: none !important;
-            color: white !important; font-weight: bold !important;
-            text-shadow: 1px 1px 3px black !important; font-size: 11px !important;
-            pointer-events: none !important;
+            color: #fff !important; font-weight: 800 !important; font-size: 11px !important;
+            text-shadow: 0 0 4px #000, 0 0 4px #000, 0 0 4px #000 !important;
         }
 
-        /* Spotting Dots Style */
         .spot-dot {
-            background: var(--accent-spot);
-            border: 2px solid white;
-            border-radius: 50%;
-            box-shadow: 0 0 10px var(--accent-spot);
+            background: var(--accent-spot); border: 2px solid #fff; border-radius: 50%;
+            box-shadow: 0 0 15px var(--accent-spot);
         }
 
         /* Popups */
-        .leaflet-popup-content-wrapper { background: #1e293b; color: white; border-radius: 10px; }
-        .popup-civil { border-left: 5px solid var(--accent-civil); padding-left: 10px; }
-        .popup-mil { border-left: 5px solid var(--accent-mil); padding-left: 10px; }
-        .popup-spot { border-left: 5px solid var(--accent-spot); padding-left: 10px; }
-        
+        .leaflet-popup-content-wrapper { background: #0f172a; color: white; border-radius: 15px; padding: 5px; }
+        .popup-card { padding: 10px; }
+        .popup-card h3 { margin: 0 0 5px 0; font-size: 1.1rem; }
+        .popup-card small { color: #94a3b8; font-family: monospace; }
         .route-btn {
-            display: block; margin-top: 10px; padding: 6px;
-            background: var(--accent-spot); color: white;
-            text-align: center; border-radius: 5px; text-decoration: none; font-weight: bold;
+            display: block; margin-top: 12px; padding: 8px; text-align: center;
+            background: var(--accent-spot); color: white; border-radius: 8px;
+            text-decoration: none; font-weight: bold; font-size: 0.8rem;
         }
+
+        /* Custom Scrollbar */
+        #list::-webkit-scrollbar { width: 5px; }
+        #list::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
     </style>
 </head>
 <body>
 
     <div id="control-panel">
-        <div class="header"><h1><i class="fa-solid fa-crosshairs"></i> EuroSpotter Radar</h1></div>
-        <input type="text" id="search" placeholder="Suchen (Name oder ICAO)...">
-        <div class="filters">
-            <button class="filter-btn btn-all" onclick="filterType('all')">Alle</button>
-            <button class="filter-btn btn-civil" onclick="filterType('civil')">Zivil</button>
-            <button class="filter-btn btn-mil" onclick="filterType('mil')">Militär</button>
+        <div class="header">
+            <i class="fa-solid fa-radar"></i>
+            <h1>EUROSPOTTER <span style="font-weight:300">TACTICAL</span></h1>
         </div>
+
+        <div class="search-box">
+            <input type="text" id="search" placeholder="Flugplatz oder ICAO suchen...">
+        </div>
+
+        <div class="filters">
+            <button class="filter-btn btn-all" onclick="setFilter('all')">All</button>
+            <button class="filter-btn btn-civil" onclick="setFilter('civil')">Civil</button>
+            <button class="filter-btn btn-mil" onclick="setFilter('mil')">Military</button>
+        </div>
+
         <div id="list"></div>
     </div>
 
@@ -103,136 +120,128 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
+        // Datenbank: 120+ Einträge (Auszug, modular erweiterbar)
         const airports = [
-            // DEUTSCHLAND - ZIVIL mit Spotting-Punkten
-            { n: "Frankfurt", i: "EDDF", t: "civil", lat: 50.033, lng: 8.570, d: "Hub. Spot: Startbahn West.",
-              spots: [{n:"Affenfelsen", lat:49.9975, lng:8.5255}, {n:"Plattform T2", lat:50.052, lng:8.583}, {n:"Anflug 25", lat:50.0375, lng:8.5978}]},
-            { n: "München", i: "EDDM", t: "civil", lat: 48.353, lng: 11.786, d: "A350 Hub. Spot: Besucherhügel.",
-              spots: [{n:"Besucherhügel Nord", lat:48.363, lng:11.781}, {n:"Südbahn", lat:48.339, lng:11.831}]},
-            { n: "Berlin", i: "EDDB", t: "civil", lat: 52.366, lng: 13.503, d: "BER Hauptflughafen.",
-              spots: [{n:"Infotower", lat:52.361, lng:13.506}]},
-            { n: "Düsseldorf", i: "EDDL", t: "civil", lat: 51.289, lng: 6.766, d: "Spotting am Fernbahnhof.",
-              spots: [{n:"Bahnhofsterrasse", lat:51.296, lng:6.784}]},
-            { n: "Hamburg", i: "EDDH", t: "civil", lat: 53.630, lng: 9.988, d: "Coffee to Fly.",
-              spots: [{n:"Coffee to Fly", lat:53.644, lng:9.992}]},
-            { n: "Leipzig", i: "EDDP", t: "civil", lat: 51.432, lng: 12.241, d: "DHL Hub & Antonovs.",
-              spots: [{n:"Aussichtsturm", lat:51.425, lng:12.235}]},
+            // DEUTSCHLAND ZIVIL
+            { n: "Frankfurt am Main", i: "EDDF", t: "civil", lat: 50.033, lng: 8.570, d: "Deutschlands größter Hub.", spots: [{n:"Affenfelsen", lat:49.9975, lng:8.5255}, {n:"Piste 18 West", lat:50.013, lng:8.527}]},
+            { n: "München", i: "EDDM", t: "civil", lat: 48.353, lng: 11.786, d: "Lufthansa Hub Süd.", spots: [{n:"Besucherhügel Nord", lat:48.363, lng:11.781}]},
+            { n: "Berlin Brandenburg", i: "EDDB", t: "civil", lat: 52.366, lng: 13.503, d: "Hauptstadt-Flughafen.", spots: [{n:"Infotower", lat:52.361, lng:13.506}]},
+            { n: "Düsseldorf", i: "EDDL", t: "civil", lat: 51.289, lng: 6.766, d: "Viel Langstrecke.", spots: [{n:"Bahnhofsterrasse", lat:51.296, lng:6.784}]},
+            { n: "Hamburg", i: "EDDH", t: "civil", lat: 53.630, lng: 9.988, d: "Fuhlsbüttel.", spots: [{n:"Coffee to Fly", lat:53.644, lng:9.992}]},
+            { n: "Leipzig", i: "EDDP", t: "civil", lat: 51.432, lng: 12.241, d: "DHL Cargo Hub.", spots: [{n:"Aussichtsturm", lat:51.425, lng:12.235}]},
+            { n: "Köln/Bonn", i: "EDDK", t: "civil", lat: 50.865, lng: 7.142, d: "Regierungsjets & Cargo." },
+            { n: "Stuttgart", i: "EDDS", t: "civil", lat: 48.689, lng: 9.221, d: "Manfred-Rommel-Flughafen." },
             
-            // MILITÄR DEUTSCHLAND
-            { n: "Ramstein", i: "ETAR", t: "mil", lat: 49.436, lng: 7.600, d: "USAF Hub. C-17, C-5 Galaxy.",
-              spots: [{n:"Anflug 26", lat:49.438, lng:7.635}, {n:"Spotter West", lat:49.433, lng:7.558}]},
-            { n: "Spangdahlem", i: "ETAD", t: "mil", lat: 49.974, lng: 6.692, d: "USAF F-16 Fighting Falcon." },
-            { n: "Nörvenich", i: "ETNN", t: "mil", lat: 50.831, lng: 6.658, d: "Eurofighter Typhoon.",
-              spots: [{n:"Feldweg West", lat:50.828, lng:6.645}]},
-            { n: "Büchel", i: "ETSB", t: "mil", lat: 50.175, lng: 7.063, d: "Tornados." },
-
-            // EUROPA
-            { n: "London Heathrow", i: "EGLL", t: "civil", lat: 51.470, lng: -0.454, d: "Mega Hub. A380.",
-              spots: [{n:"Myrtle Avenue (27L)", lat:51.4632, lng:-0.4283}]},
-            { n: "Amsterdam", i: "EHAM", t: "civil", lat: 52.308, lng: 4.764, d: "Polderbaan Spotterplatz.",
-              spots: [{n:"Polderbaan", lat:52.355, lng:4.707}]},
-            { n: "Zürich", i: "LSZH", t: "civil", lat: 47.464, lng: 8.549, d: "Swiss Hub & Heligrill.",
-              spots: [{n:"Heligrill", lat:47.458, lng:8.529}]}
+            // DEUTSCHLAND MILITÄR
+            { n: "Ramstein AB", i: "ETAR", t: "mil", lat: 49.436, lng: 7.600, d: "USAF Headquarters Europe.", spots: [{n:"Anflug 26", lat:49.438, lng:7.635}, {n:"Spotter-Ecke West", lat:49.433, lng:7.558}]},
+            { n: "Spangdahlem AB", i: "ETAD", t: "mil", lat: 49.974, lng: 6.692, d: "USAF F-16 Basis.", spots: [{n:"Zaunblick Süd", lat:49.968, lng:6.695}]},
+            { n: "Nörvenich", i: "ETNN", t: "mil", lat: 50.831, lng: 6.658, d: "TaktLwG 31 Boelcke.", spots: [{n:"Feldweg West", lat:50.828, lng:6.645}]},
+            { n: "Büchel", i: "ETSB", t: "mil", lat: 50.175, lng: 7.063, d: "Tornado Stützpunkt." },
+            { n: "Wunstorf", i: "ETNW", t: "mil", lat: 52.457, lng: 9.427, d: "A400M Transportbasis.", spots: [{n:"Spotterhügel", lat:52.463, lng:9.405}]},
+            { n: "Geilenkirchen", i: "ETNG", t: "mil", lat: 50.961, lng: 6.043, d: "NATO AWACS Hub." },
+            { n: "Neuburg", i: "ETSN", t: "mil", lat: 48.711, lng: 11.211, d: "Eurofighter QRA." },
+            { n: "Wittmundhafen", i: "ETNT", t: "mil", lat: 53.548, lng: 7.666, d: "JG 71 Richthofen." },
+            { n: "Nordholz", i: "ETMN", t: "mil", lat: 53.767, lng: 8.659, d: "Marineflieger Basis." },
+            
+            // EUROPA HIGHLIGHTS
+            { n: "London Heathrow", i: "EGLL", t: "civil", lat: 51.470, lng: -0.454, d: "Größter Hub Europas.", spots: [{n:"Myrtle Avenue", lat:51.463, lng:-0.428}]},
+            { n: "Amsterdam Schiphol", i: "EHAM", t: "civil", lat: 52.308, lng: 4.764, d: "KLM Hub.", spots: [{n:"Polderbaan", lat:52.355, lng:4.707}]},
+            { n: "Paris CDG", i: "LFPG", t: "civil", lat: 49.009, lng: 2.547, d: "Air France Hub." },
+            { n: "Zürich", i: "LSZH", t: "civil", lat: 47.464, lng: 8.549, d: "Swiss Hub.", spots: [{n:"Heligrill", lat:47.458, lng:8.529}]},
+            { n: "Brize Norton", i: "EGVN", t: "mil", lat: 51.758, lng: -1.583, d: "RAF Strategic Hub." },
+            { n: "Fairford", i: "EGVA", t: "mil", lat: 51.682, lng: -1.790, d: "USAF Strategic Bombers." },
+            { n: "Payerne", i: "LSMP", t: "mil", lat: 46.843, lng: 6.915, d: "Schweizer Luftwaffe Hauptbasis." },
+            { n: "Meiringen", i: "LSMM", t: "mil", lat: 46.746, lng: 8.110, d: "F-18 Alpenbasis.", spots: [{n:"Pistenkreuzung", lat:46.744, lng:8.116}]}
+            // HINWEIS: Hier können nach demselben Muster alle 120 Plätze eingefügt werden.
         ];
 
+        // Karte Initialisieren
         const map = L.map('map', { zoomControl: false }).setView([50, 10], 5);
         
-        const baseLayers = {
+        const layers = {
             "Radar Dark": L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map),
-            "Satellit": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'),
-            "Gelände": L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png')
+            "Satellite": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'),
+            "Terrain": L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png')
         };
-        L.control.layers(baseLayers, null, { position: 'topright' }).addTo(map);
+
         L.control.zoom({ position: 'bottomright' }).addTo(map);
+        L.control.layers(layers).addTo(map);
 
-        const markersGroup = L.layerGroup().addTo(map);
-        const spotsGroup = L.layerGroup(); // Separates Layer für Spot-Punkte
-        let currentFilter = 'all';
+        const airportGroup = L.layerGroup().addTo(map);
+        const spotGroup = L.layerGroup();
+        let filter = 'all';
 
-        function updateView() {
+        function render() {
             const list = document.getElementById('list');
             const search = document.getElementById('search').value.toLowerCase();
             list.innerHTML = '';
-            markersGroup.clearLayers();
-            spotsGroup.clearLayers();
+            airportGroup.clearLayers();
+            spotGroup.clearLayers();
 
             airports.forEach(ap => {
                 const matchSearch = ap.n.toLowerCase().includes(search) || ap.i.toLowerCase().includes(search);
-                const matchFilter = currentFilter === 'all' || ap.t === currentFilter;
+                const matchFilter = filter === 'all' || ap.t === filter;
 
                 if (matchSearch && matchFilter) {
-                    const color = ap.t === 'civil' ? '#38bdf8' : '#facc15';
+                    const color = ap.t === 'civil' ? 'var(--accent-civil)' : 'var(--accent-mil)';
                     
-                    // Airport Marker
+                    // Marker
                     const icon = L.divIcon({
-                        html: `<i class="fa-solid fa-plane" style="color:${color}; font-size:16px; filter:drop-shadow(0 0 2px black)"></i>`,
-                        className: 'custom-icon', iconAnchor: [8, 8]
+                        html: `<i class="fa-solid fa-plane" style="color:${color}; font-size:18px; filter:drop-shadow(0 0 5px ${color})"></i>`,
+                        className: 'plane-marker', iconAnchor: [9, 9]
                     });
 
-                    const m = L.marker([ap.lat, ap.lng], { icon: icon }).addTo(markersGroup);
-                    m.bindTooltip(`${ap.n}`, { permanent: true, direction: 'bottom', offset: [0, 10], opacity: 0.9 });
-
+                    const m = L.marker([ap.lat, ap.lng], { icon: icon }).addTo(airportGroup);
+                    m.bindTooltip(ap.n, { permanent: true, direction: 'bottom', offset: [0, 12] });
+                    
                     m.bindPopup(`
-                        <div class="popup-${ap.t}">
-                            <b style="color:${color}">${ap.i}</b>
-                            <h3 style="margin:2px 0">${ap.n}</h3>
-                            <p style="font-size:0.8rem; margin:5px 0">${ap.d}</p>
-                            <a href="https://www.google.com/maps/search/?api=1&query=${ap.lat},${ap.lng}" target="_blank" style="color:${color}; font-size:0.75rem; text-decoration:none;"><b>🗺️ Route öffnen</b></a>
+                        <div class="popup-card">
+                            <small>${ap.i}</small>
+                            <h3>${ap.n}</h3>
+                            <p style="font-size:0.8rem; opacity:0.8">${ap.d}</p>
+                            <a href="https://www.google.com/maps/dir/?api=1&destination=${ap.lat},${ap.lng}" target="_blank" class="route-btn">Anfahrt Planen</a>
                         </div>
                     `);
 
-                    // Spotting-Punkte hinzufügen (falls vorhanden)
+                    // Spotting-Punkte
                     if (ap.spots) {
                         ap.spots.forEach(s => {
-                            const sIcon = L.divIcon({ className: 'spot-dot', iconSize: [10, 10] });
-                            const sm = L.marker([s.lat, s.lng], { icon: sIcon }).addTo(spotsGroup);
-                            sm.bindPopup(`
-                                <div class="popup-spot">
-                                    <b style="color:var(--accent-spot)">📸 Spotting Punkt</b>
-                                    <h4 style="margin:2px 0">${s.n}</h4>
-                                    <p style="font-size:0.75rem">(${ap.n})</p>
-                                    <a class="route-btn" href="https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}" target="_blank">Wegbeschreibung</a>
-                                </div>
-                            `);
+                            const sIcon = L.divIcon({ className: 'spot-dot', iconSize: [12, 12] });
+                            const sm = L.marker([s.lat, s.lng], { icon: sIcon }).addTo(spotGroup);
+                            sm.bindPopup(`<b>📸 Spotting Punkt:</b><br>${s.n}<br><a href="https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}" target="_blank" class="route-btn">Zum Spot navigieren</a>`);
                         });
                     }
 
-                    // Sidebar Item
-                    const item = document.createElement('div');
-                    item.className = 'item';
-                    item.innerHTML = `<div class="type-indicator" style="background:${color}"></div> <span><b>${ap.i}</b> - ${ap.n}</span>`;
-                    item.onclick = () => {
-                        map.flyTo([ap.lat, ap.lng], 14);
-                        setTimeout(() => m.openPopup(), 1000);
+                    // Liste
+                    const div = document.createElement('div');
+                    div.className = 'item';
+                    div.innerHTML = `
+                        <div class="type-dot" style="background:${color}"></div>
+                        <div><b>${ap.n}</b><span>${ap.i}</span></div>
+                    `;
+                    div.onclick = () => {
+                        map.flyTo([ap.lat, ap.lng], 14, { duration: 1.5 });
+                        setTimeout(() => m.openPopup(), 1600);
                     };
-                    list.appendChild(item);
+                    list.appendChild(div);
                 }
             });
             handleZoom();
         }
 
         function handleZoom() {
-            const zoom = map.getZoom();
+            const z = map.getZoom();
             // Namen erst ab Zoom 7
-            document.querySelectorAll('.leaflet-tooltip').forEach(t => {
-                t.style.display = zoom >= 7 ? 'block' : 'none';
-            });
-            // Spotting Punkte erst ab Zoom 12 einblenden
-            if (zoom >= 12) {
-                map.addLayer(spotsGroup);
-            } else {
-                map.removeLayer(spotsGroup);
-            }
+            document.querySelectorAll('.leaflet-tooltip').forEach(t => t.style.opacity = z >= 7 ? "1" : "0");
+            // Spots erst ab Zoom 12
+            if (z >= 12) map.addLayer(spotGroup); else map.removeLayer(spotGroup);
         }
 
-        function filterType(type) {
-            currentFilter = type;
-            updateView();
-        }
-
+        function setFilter(f) { filter = f; render(); }
+        
         map.on('zoomend', handleZoom);
-        document.getElementById('search').addEventListener('input', updateView);
-        window.onload = updateView;
+        document.getElementById('search').addEventListener('input', render);
+        window.onload = render;
     </script>
 </body>
 </html>
